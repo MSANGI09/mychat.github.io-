@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bluetooth Chat</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f0f0f0;
+    }
+    .chat-container {
+      width: 300px;
+      height: 500px;
+      background-color: #fff;
+      border: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+    }
+    .messages {
+      flex: 1;
+      padding: 10px;
+      overflow-y: scroll;
+    }
+    .input-container {
+      display: flex;
+      border-top: 1px solid #ccc;
+    }
+    .input-container input {
+      flex: 1;
+      padding: 10px;
+      border: none;
+      border-right: 1px solid #ccc;
+    }
+    .input-container button {
+      padding: 10px;
+      border: none;
+      background-color: #007bff;
+      color: #fff;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="messages" id="messages"></div>
+    <div class="input-container">
+      <input type="text" id="messageInput" placeholder="Type a message...">
+      <button id="sendButton">Send</button>
+    </div>
+  </div>
+  <script>
+    document.getElementById('sendButton').addEventListener('click', sendMessage);
+    document.getElementById('messageInput').addEventListener('keypress', function (e) {
+      if (e.key === 'Enter') {
+        sendMessage();
+      }
+    });
+
+    function sendMessage() {
+      const input = document.getElementById('messageInput');
+      const message = input.value;
+      if (message.trim() === '') return;
+      
+      displayMessage(message, 'sent');
+      sendBluetoothMessage(message);
+      input.value = '';
+    }
+
+    function displayMessage(message, type) {
+      const messagesContainer = document.getElementById('messages');
+      const messageElement = document.createElement('div');
+      messageElement.textContent = message;
+      messageElement.className = type;
+      messagesContainer.appendChild(messageElement);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    async function sendBluetoothMessage(message) {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: ['d67a0f5a-9d4a-4d58-aad6-4c9f12e4ab9e'] }]
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('d67a0f5a-9d4a-4d58-aad6-4c9f12e4ab9e');
+        const characteristic = await service.getCharacteristic('a3b4e7d2-1f63-4c5f-bb9d-1d76af8311f5');
+        
+        const encoder = new TextEncoder();
+        const data = encoder.encode(message);
+        
+        await characteristic.writeValue(data);
+        console.log('Message sent:', message);
+      } catch (error) {
+        console.error('Error sending Bluetooth message:', error);
+      }
+    }
+
+    async function receiveBluetoothMessage() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: ['d67a0f5a-9d4a-4d58-aad6-4c9f12e4ab9e'] }]
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('d67a0f5a-9d4a-4d58-aad6-4c9f12e4ab9e');
+        const characteristic = await service.getCharacteristic('a3b4e7d2-1f63-4c5f-bb9d-1d76af8311f5');
+        
+        characteristic.addEventListener('characteristicvaluechanged', event => {
+          const decoder = new TextDecoder();
+          const message = decoder.decode(event.target.value);
+          displayMessage(message, 'received');
+        });
+
+        await characteristic.startNotifications();
+        console.log('Listening for messages...');
+      } catch (error) {
+        console.error('Error receiving Bluetooth message:', error);
+      }
+    }
+
+    receiveBluetoothMessage();
+  </script>
+</body>
+</html>
